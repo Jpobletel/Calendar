@@ -38,7 +38,7 @@ export function SaveStatusIndicator() {
         onClick={saveNow}
         className="min-h-touch rounded-lg px-2 text-xs font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950"
       >
-        Guardar ahora
+        Guardar cambios
       </button>
     </div>
   );

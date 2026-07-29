@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { CalendarClock, Download, Menu, MoreHorizontal, Save, Settings, Upload } from 'lucide-react';
+import { CalendarClock, Camera, Download, Menu, MoreHorizontal, Save, Settings, Upload } from 'lucide-react';
 import { IconButton } from '../common/IconButton';
 import { Modal } from '../common/Modal';
 import { SaveStatusIndicator } from './SaveStatusIndicator';
 import { SettingsDialog } from './SettingsDialog';
 import { ScheduleSelectorDialog } from '../schedules/ScheduleSelectorDialog';
 import { ExportDialog } from '../export/ExportDialog';
+import { useExport } from '../export/ExportProvider';
 import { ImportDialog } from '../import/ImportDialog';
 import { useStore } from '../../state/store';
 import type { Schedule } from '../../types';
@@ -21,7 +22,30 @@ export function AppHeader({ schedule, onOpenMenu }: AppHeaderProps) {
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
   const saveNow = useStore((s) => s.saveNow);
+  const { requestExport } = useExport();
+
+  async function saveCalendarPhoto() {
+    if (!schedule || savingPhoto) return;
+    setSavingPhoto(true);
+    try {
+      await requestExport({
+        schedule,
+        scope: 'combined',
+        orientation: 'landscape',
+        quality: 'normal',
+        background: 'light',
+        filenamePrefix: 'calendario',
+        filenameSubject: schedule.name,
+      });
+      setMobileActionsOpen(false);
+    } catch {
+      // ExportProvider muestra el detalle del error.
+    } finally {
+      setSavingPhoto(false);
+    }
+  }
 
   return (
     // Nota: los diálogos se renderizan FUERA de <header> a propósito. El header usa
@@ -83,11 +107,17 @@ export function AppHeader({ schedule, onOpenMenu }: AppHeaderProps) {
         <div className="flex flex-col gap-1">
           <MobileAction
             icon={<Save className="h-5 w-5" aria-hidden="true" />}
-            label="Guardar ahora"
+            label="Guardar cambios"
             onClick={() => {
               saveNow();
               setMobileActionsOpen(false);
             }}
+          />
+          <MobileAction
+            icon={<Camera className="h-5 w-5" aria-hidden="true" />}
+            label={savingPhoto ? 'Generando foto…' : 'Guardar foto del calendario'}
+            disabled={savingPhoto || !schedule}
+            onClick={() => void saveCalendarPhoto()}
           />
           <MobileAction
             icon={<Upload className="h-5 w-5" aria-hidden="true" />}
@@ -111,12 +141,23 @@ export function AppHeader({ schedule, onOpenMenu }: AppHeaderProps) {
   );
 }
 
-function MobileAction({ icon, label, onClick }: { icon: JSX.Element; label: string; onClick: () => void }) {
+function MobileAction({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+}: {
+  icon: JSX.Element;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 active:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800 dark:active:bg-slate-700"
+      disabled={disabled}
+      className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 active:bg-slate-200 disabled:cursor-wait disabled:opacity-60 dark:text-slate-200 dark:hover:bg-slate-800 dark:active:bg-slate-700"
     >
       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
         {icon}
