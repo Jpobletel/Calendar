@@ -1,6 +1,6 @@
 import type { Schedule } from '../../types';
 
-export type ExportScope = 'combined' | 'person' | 'allPeople' | 'day' | 'summary';
+export type ExportScope = 'calendarSnapshot' | 'combined' | 'person' | 'allPeople' | 'day' | 'summary';
 export type ExportOrientation = 'portrait' | 'landscape';
 export type ExportQuality = 'normal' | 'high';
 export type ExportBackground = 'light' | 'dark';

@@ -10,6 +10,7 @@ import { useStore } from '../../state/store';
 import type { Schedule } from '../../types';
 import { DAY_LABELS_SHORT } from '../../types';
 import { getOrderedDayIndices, filterDayIndices } from '../../utils/days';
+import { getCalendarVisibleRange } from '../../utils/calendarLayout';
 import { detectConflicts, isShiftInConflict } from '../../utils/conflicts';
 import { formatMinutesAsHours, getShiftDurationMinutes, minutesToTime, timeToMinutes } from '../../utils/time';
 import { assignOverlapLanes } from '../../utils/layout';
@@ -23,25 +24,6 @@ import {
   snapMinutes,
   type DragPreview,
 } from './dragUtils';
-
-function getVisibleRange(schedule: Schedule, visiblePersonIds: Set<string>): { startHour: number; endHour: number } {
-  const { calendarRangeMode, calendarStart, calendarEnd } = schedule.viewSettings;
-  if (calendarRangeMode === 'full') return { startHour: 0, endHour: 24 };
-  if (calendarRangeMode === 'business') {
-    return { startHour: timeToMinutes(calendarStart) / 60, endHour: timeToMinutes(calendarEnd) / 60 };
-  }
-  const relevant = schedule.shifts.filter((s) => visiblePersonIds.has(s.personId));
-  if (relevant.length === 0) return { startHour: 8, endHour: 20 };
-  let min = 24;
-  let max = 0;
-  for (const shift of relevant) {
-    const start = timeToMinutes(shift.startTime) / 60;
-    const duration = getShiftDurationMinutes(shift.startTime, shift.endTime) / 60;
-    min = Math.min(min, start);
-    max = Math.max(max, Math.min(24, start + duration));
-  }
-  return { startHour: Math.max(0, Math.floor(min)), endHour: Math.min(24, Math.ceil(max)) };
-}
 
 interface CreateDragState {
   pointerId: number;
@@ -97,7 +79,7 @@ export function CalendarGridView({ schedule }: CalendarGridViewProps) {
   }, [schedule.viewSettings.weekStart, schedule.viewSettings.dayFilter, schedule.shifts, visiblePersonIds]);
 
   const { startHour, endHour } = useMemo(
-    () => getVisibleRange(schedule, visiblePersonIds),
+    () => getCalendarVisibleRange(schedule, visiblePersonIds),
     [schedule, visiblePersonIds],
   );
   const totalHours = Math.max(1, endHour - startHour);

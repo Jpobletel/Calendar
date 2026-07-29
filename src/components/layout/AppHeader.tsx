@@ -32,7 +32,7 @@ export function AppHeader({ schedule, onOpenMenu }: AppHeaderProps) {
     try {
       await requestExport({
         schedule,
-        scope: 'combined',
+        scope: 'calendarSnapshot',
         orientation: 'landscape',
         quality: 'normal',
         background: 'light',

@@ -2,9 +2,18 @@ import type { CSSProperties } from 'react';
 import type { ExportJob } from './types';
 import type { Person, Schedule } from '../../types';
 import { DAY_LABELS, DAY_LABELS_SHORT } from '../../types';
+import { getCalendarVisibleRange } from '../../utils/calendarLayout';
+import { detectConflicts, isShiftInConflict } from '../../utils/conflicts';
 import { getOrderedDayIndices } from '../../utils/days';
+import { assignOverlapLanes } from '../../utils/layout';
 import { calculateAllStats, calculateDailyTotal, calculateWeeklyTotal } from '../../utils/totals';
-import { formatMinutesAsHours, getWorkedMinutes, isOvernightShift } from '../../utils/time';
+import {
+  formatMinutesAsHours,
+  getShiftDurationMinutes,
+  getWorkedMinutes,
+  isOvernightShift,
+  timeToMinutes,
+} from '../../utils/time';
 import { sortPeopleByOrder, sortShiftsByStartTime } from '../../utils/sort';
 
 interface Palette {
@@ -131,6 +140,192 @@ function WeekTable({ schedule, people, days, palette }: { schedule: Schedule; pe
   );
 }
 
+const EXPORT_HOUR_HEIGHT = 44;
+
+function readableTextColor(color: string): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return '#ffffff';
+  const value = Number.parseInt(match[1], 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return (red * 299 + green * 587 + blue * 114) / 1000 > 165 ? '#0f172a' : '#ffffff';
+}
+
+function CalendarSnapshot({
+  schedule,
+  people,
+  days,
+  palette,
+}: {
+  schedule: Schedule;
+  people: Person[];
+  days: number[];
+  palette: Palette;
+}) {
+  const visiblePersonIds = new Set(people.map((person) => person.id));
+  const { startHour, endHour } = getCalendarVisibleRange(schedule, visiblePersonIds);
+  const totalHours = Math.max(1, endHour - startHour);
+  const rangeStartMinutes = startHour * 60;
+  const rangeEndMinutes = endHour * 60;
+  const hourMarks = Array.from({ length: totalHours + 1 }, (_, index) => startHour + index);
+  const conflicts = detectConflicts(schedule.shifts);
+  const gridHeight = totalHours * EXPORT_HOUR_HEIGHT;
+
+  return (
+    <div>
+      <div
+        data-export-calendar=""
+        style={{
+          display: 'flex',
+          overflow: 'hidden',
+          border: `1px solid ${palette.border}`,
+          borderRadius: 14,
+          backgroundColor: palette.bg,
+        }}
+      >
+        <div style={{ width: 58, flexShrink: 0, borderRight: `1px solid ${palette.border}` }}>
+          <div style={{ height: 36, backgroundColor: palette.cardBg, borderBottom: `1px solid ${palette.border}` }} />
+          <div style={{ position: 'relative', height: gridHeight }}>
+            {hourMarks.map((hour, index) => (
+              <span
+                key={hour}
+                style={{
+                  position: 'absolute',
+                  top: index * EXPORT_HOUR_HEIGHT,
+                  right: 6,
+                  transform:
+                    index === 0 ? 'translateY(0)' : index === hourMarks.length - 1 ? 'translateY(-100%)' : 'translateY(-50%)',
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: palette.subtext,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {String(hour % 24).padStart(2, '0')}:00
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {days.map((day) => {
+          const dayShifts = schedule.shifts.filter(
+            (shift) => shift.day === day && visiblePersonIds.has(shift.personId),
+          );
+          const laneItems = dayShifts.map((shift) => ({
+            id: shift.id,
+            start: timeToMinutes(shift.startTime),
+            end: timeToMinutes(shift.startTime) + getShiftDurationMinutes(shift.startTime, shift.endTime),
+          }));
+          const { lanes, laneCount } = assignOverlapLanes(laneItems);
+
+          return (
+            <div
+              key={day}
+              style={{
+                minWidth: 0,
+                flex: 1,
+                borderRight: day === days[days.length - 1] ? undefined : `1px solid ${palette.border}`,
+              }}
+            >
+              <div
+                style={{
+                  height: 36,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderBottom: `1px solid ${palette.border}`,
+                  backgroundColor: palette.cardBg,
+                  color: palette.text,
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}
+              >
+                {DAY_LABELS_SHORT[day]}
+              </div>
+              <div style={{ position: 'relative', height: gridHeight }}>
+                {hourMarks.slice(0, -1).map((hour, index) => (
+                  <div
+                    key={hour}
+                    style={{
+                      position: 'absolute',
+                      insetInline: 0,
+                      top: index * EXPORT_HOUR_HEIGHT,
+                      borderTop: `1px solid ${palette.border}`,
+                      opacity: 0.65,
+                    }}
+                  />
+                ))}
+                {dayShifts.map((shift) => {
+                  const person = schedule.people.find((candidate) => candidate.id === shift.personId);
+                  const startMinutes = timeToMinutes(shift.startTime);
+                  const durationMinutes = getShiftDurationMinutes(shift.startTime, shift.endTime);
+                  const endMinutes = startMinutes + durationMinutes;
+                  if (endMinutes <= rangeStartMinutes || startMinutes >= rangeEndMinutes) return null;
+
+                  const visibleStart = Math.max(startMinutes, rangeStartMinutes);
+                  const visibleEnd = Math.min(endMinutes, rangeEndMinutes);
+                  const top = ((visibleStart - rangeStartMinutes) / 60) * EXPORT_HOUR_HEIGHT;
+                  const height = Math.max(
+                    16,
+                    ((visibleEnd - visibleStart) / 60) * EXPORT_HOUR_HEIGHT,
+                  );
+                  const lane = lanes.get(shift.id) ?? 0;
+                  const color = person?.color ?? '#64748b';
+                  const compact = height < 34;
+
+                  return (
+                    <div
+                      key={shift.id}
+                      data-export-calendar-block=""
+                      style={{
+                        position: 'absolute',
+                        top,
+                        height,
+                        left: `calc(${(lane / laneCount) * 100}% + 2px)`,
+                        width: `calc(${100 / laneCount}% - 4px)`,
+                        overflow: 'hidden',
+                        boxSizing: 'border-box',
+                        borderRadius: 6,
+                        border: isShiftInConflict(conflicts, shift.id)
+                          ? '2px solid #fbbf24'
+                          : '1px solid rgba(255,255,255,0.55)',
+                        backgroundColor: color,
+                        color: readableTextColor(color),
+                        padding: compact ? '2px 4px' : '4px 5px',
+                        boxShadow: '0 2px 5px rgba(15,23,42,0.18)',
+                        fontSize: compact ? 8 : 9,
+                        lineHeight: 1.15,
+                      }}
+                    >
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 800 }}>
+                        {person?.name}
+                      </div>
+                      {!compact && (
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 650 }}>
+                          {shift.startTime}–{shift.endTime}
+                          {isOvernightShift(shift.startTime, shift.endTime) ? ' +1' : ''}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <section style={{ marginTop: 28 }}>
+        <h2 style={{ margin: '0 0 10px', color: palette.text, fontSize: 18, fontWeight: 800 }}>
+          Resumen semanal
+        </h2>
+        <SummaryTable schedule={schedule} people={people} days={days} palette={palette} />
+      </section>
+    </div>
+  );
+}
+
 function DayList({ schedule, people, day, palette }: { schedule: Schedule; people: Person[]; day: number; palette: Palette }) {
   const dayShifts = sortShiftsByStartTime(schedule.shifts.filter((s) => s.day === day && people.some((p) => p.id === s.personId)));
   const total = people.reduce((sum, p) => sum + calculateDailyTotal(schedule.shifts, p.id, day), 0);
@@ -228,7 +423,11 @@ export function ExportContent({ job }: { job: ExportJob }) {
   let subtitle: string;
   let body: JSX.Element;
 
-  if (job.scope === 'person' && job.personId) {
+  if (job.scope === 'calendarSnapshot') {
+    people = sortPeopleByOrder(job.schedule.people.filter((person) => person.visible));
+    subtitle = 'Calendario visual — semana completa con resumen';
+    body = <CalendarSnapshot schedule={job.schedule} people={people} days={days} palette={palette} />;
+  } else if (job.scope === 'person' && job.personId) {
     const person = job.schedule.people.find((p) => p.id === job.personId);
     people = person ? [person] : [];
     subtitle = `Horario de ${person?.name ?? ''}`;

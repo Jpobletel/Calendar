@@ -16,6 +16,7 @@ interface ExportDialogProps {
 }
 
 const SCOPE_LABELS: Record<ExportScope, string> = {
+  calendarSnapshot: 'Calendario visual + resumen semanal',
   combined: 'Horario combinado (semana completa)',
   person: 'Horario de una persona',
   allPeople: 'Horarios de todas las personas',
@@ -27,7 +28,7 @@ export function ExportDialog({ isOpen, onClose, schedule }: ExportDialogProps) {
   const { requestExport } = useExport();
   const pushNotification = useStore((s) => s.pushNotification);
   const appData = useStore((s) => s.data);
-  const [scope, setScope] = useState<ExportScope>('combined');
+  const [scope, setScope] = useState<ExportScope>('calendarSnapshot');
   const [personId, setPersonId] = useState(schedule.people[0]?.id ?? '');
   const [orientation, setOrientation] = useState<ExportOrientation>('portrait');
   const [quality, setQuality] = useState<ExportQuality>('normal');
@@ -40,6 +41,10 @@ export function ExportDialog({ isOpen, onClose, schedule }: ExportDialogProps) {
       setPersonId(schedule.people[0]?.id ?? '');
     }
   }, [isOpen, personId, schedule.id, schedule.people]);
+
+  useEffect(() => {
+    if (scope === 'calendarSnapshot') setOrientation('landscape');
+  }, [scope]);
 
   async function handleDownload() {
     if (scope === 'person' && !personId) {
@@ -56,7 +61,8 @@ export function ExportDialog({ isOpen, onClose, schedule }: ExportDialogProps) {
         orientation,
         quality,
         background,
-        filenamePrefix: scope === 'summary' ? 'resumen-horas' : 'horario',
+        filenamePrefix:
+          scope === 'summary' ? 'resumen-horas' : scope === 'calendarSnapshot' ? 'calendario' : 'horario',
         filenameSubject:
           scope === 'person' ? schedule.people.find((p) => p.id === personId)?.name ?? schedule.name : schedule.name,
       });
