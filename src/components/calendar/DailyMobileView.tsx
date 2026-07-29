@@ -23,14 +23,15 @@ export function DailyMobileView({ schedule }: DailyMobileViewProps) {
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const visiblePeople = schedule.people.filter((p) => p.visible);
+  const visiblePeople = useMemo(() => schedule.people.filter((p) => p.visible), [schedule.people]);
+  const visiblePersonIds = useMemo(() => new Set(visiblePeople.map((person) => person.id)), [visiblePeople]);
   const conflicts = useMemo(() => detectConflicts(schedule.shifts), [schedule.shifts]);
   const dayShifts = useMemo(
     () =>
       sortShiftsByStartTime(
-        schedule.shifts.filter((sh) => sh.day === selectedDay && visiblePeople.some((p) => p.id === sh.personId)),
+        schedule.shifts.filter((sh) => sh.day === selectedDay && visiblePersonIds.has(sh.personId)),
       ),
-    [schedule.shifts, selectedDay, visiblePeople],
+    [schedule.shifts, selectedDay, visiblePersonIds],
   );
   const dayTotal = visiblePeople.reduce((sum, p) => sum + calculateDailyTotal(schedule.shifts, p.id, selectedDay), 0);
 

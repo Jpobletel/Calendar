@@ -3,6 +3,7 @@ import type { Person, Shift } from '../../types';
 import { formatMinutesAsHours, getShiftDurationMinutes, getWorkedMinutes, isOvernightShift, timeToMinutes } from '../../utils/time';
 import {
   HANDLE_HEIGHT,
+  MIN_DURATION_MINUTES,
   MOVE_THRESHOLD_PX,
   clampMinutes,
   minutesFromClientY,
@@ -26,6 +27,8 @@ interface ResizeDragState {
   pointerId: number;
   edge: 'start' | 'end';
   columnTop: number;
+  startClientY: number;
+  moved: boolean;
   fixedMinutes: number;
   currentValue: number;
 }
@@ -40,6 +43,7 @@ interface CalendarShiftBlockProps {
   width: string;
   rangeStartMinutes: number;
   rangeEndMinutes: number;
+  startsBefore: boolean;
   spillsOver: boolean;
   isDragging: boolean;
   onOpenEdit: (shiftId: string) => void;
@@ -62,6 +66,7 @@ export function CalendarShiftBlock({
   width,
   rangeStartMinutes,
   rangeEndMinutes,
+  startsBefore,
   spillsOver,
   isDragging,
   onOpenEdit,
@@ -110,7 +115,8 @@ export function CalendarShiftBlock({
 
     const rawStart = minutesFromClientY(event.clientY, resolved.rect.top, rangeStartMinutes) - drag.grabOffsetMinutes;
     const snapped = snapMinutes(rawStart);
-    const clampedStart = clampMinutes(snapped, rangeStartMinutes, rangeEndMinutes - drag.durationMinutes);
+    const latestStart = Math.max(rangeStartMinutes, rangeEndMinutes - drag.durationMinutes);
+    const clampedStart = clampMinutes(snapped, rangeStartMinutes, latestStart);
 
     drag.currentDay = resolved.day;
     drag.currentStart = clampedStart;
@@ -144,6 +150,13 @@ export function CalendarShiftBlock({
     });
   }
 
+  function handleBodyPointerCancel(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = moveRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    moveRef.current = null;
+    onDragUpdate(null);
+  }
+
   function handleResizePointerDown(edge: 'start' | 'end') {
     return (event: ReactPointerEvent<HTMLDivElement>) => {
       event.stopPropagation();
@@ -153,6 +166,8 @@ export function CalendarShiftBlock({
         pointerId: event.pointerId,
         edge,
         columnTop,
+        startClientY: event.clientY,
+        moved: false,
         fixedMinutes: edge === 'start' ? shiftEndMinutes : shiftStartMinutes,
         currentValue: edge === 'start' ? shiftStartMinutes : shiftEndMinutes,
       };
@@ -163,12 +178,16 @@ export function CalendarShiftBlock({
   function handleResizePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = resizeRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.moved && Math.abs(event.clientY - drag.startClientY) > MOVE_THRESHOLD_PX) {
+      drag.moved = true;
+    }
+    if (!drag.moved) return;
     const raw = minutesFromClientY(event.clientY, drag.columnTop, rangeStartMinutes);
     const snapped = snapMinutes(raw);
     const value =
       drag.edge === 'start'
-        ? clampMinutes(snapped, rangeStartMinutes, drag.fixedMinutes - 15)
-        : clampMinutes(snapped, drag.fixedMinutes + 15, rangeEndMinutes);
+        ? clampMinutes(snapped, rangeStartMinutes, drag.fixedMinutes - MIN_DURATION_MINUTES)
+        : clampMinutes(snapped, drag.fixedMinutes + MIN_DURATION_MINUTES, rangeEndMinutes);
     drag.currentValue = value;
 
     onDragUpdate({
@@ -186,6 +205,10 @@ export function CalendarShiftBlock({
     if (!drag || drag.pointerId !== event.pointerId) return;
     resizeRef.current = null;
     onDragUpdate(null);
+    if (!drag.moved) {
+      onOpenEdit(shift.id);
+      return;
+    }
     onDragCommit({
       kind: drag.edge === 'start' ? 'resize-start' : 'resize-end',
       day: shift.day,
@@ -196,44 +219,56 @@ export function CalendarShiftBlock({
     });
   }
 
+  function handleResizePointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = resizeRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    resizeRef.current = null;
+    onDragUpdate(null);
+  }
+
   return (
     <button
       type="button"
       onPointerDown={handleBodyPointerDown}
       onPointerMove={handleBodyPointerMove}
       onPointerUp={handleBodyPointerUp}
-      onPointerCancel={handleBodyPointerUp}
-      className={`absolute touch-none overflow-hidden rounded-lg border px-1.5 py-1 text-left text-[11px] leading-tight text-white shadow-sm transition-opacity hover:z-10 ${
+      onPointerCancel={handleBodyPointerCancel}
+      className={`absolute touch-none overflow-hidden rounded-lg border px-1.5 py-1 text-left text-[11px] leading-tight text-white shadow-sm transition-[opacity,box-shadow,transform] duration-150 hover:z-10 hover:shadow-md focus-visible:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white ${
         hasConflict ? 'ring-2 ring-amber-400' : 'border-white/40'
       } ${isDragging ? 'opacity-40' : 'opacity-100'} cursor-grab active:cursor-grabbing`}
       style={{ top, height, left, width, backgroundColor: person?.color ?? '#94a3b8' }}
       title={`${person?.name ?? ''}: ${shift.startTime}-${shift.endTime}. Arrastra para mover, toca los bordes para cambiar la duración.`}
     >
-      <div
-        onPointerDown={handleResizePointerDown('start')}
-        onPointerMove={handleResizePointerMove}
-        onPointerUp={handleResizePointerUp}
-        onPointerCancel={handleResizePointerUp}
-        className="absolute inset-x-0 top-0 touch-none cursor-ns-resize"
-        style={{ height: HANDLE_HEIGHT }}
-        aria-hidden="true"
-      />
+      {!startsBefore && (
+        <div
+          onPointerDown={handleResizePointerDown('start')}
+          onPointerMove={handleResizePointerMove}
+          onPointerUp={handleResizePointerUp}
+          onPointerCancel={handleResizePointerCancel}
+          className="absolute inset-x-0 top-0 touch-none cursor-ns-resize"
+          style={{ height: HANDLE_HEIGHT }}
+          aria-hidden="true"
+        />
+      )}
       <span className="block truncate font-semibold">{person?.name}</span>
       <span className="block truncate">
         {shift.startTime}–{shift.endTime}
         {overnight ? ' (+1 día)' : ''}
       </span>
       <span className="block truncate opacity-90">{formatMinutesAsHours(worked)}</span>
+      {startsBefore && <span className="block truncate font-semibold">↳ comenzó antes</span>}
       {spillsOver && <span className="block truncate font-semibold">↴ continúa mañana</span>}
-      <div
-        onPointerDown={handleResizePointerDown('end')}
-        onPointerMove={handleResizePointerMove}
-        onPointerUp={handleResizePointerUp}
-        onPointerCancel={handleResizePointerUp}
-        className="absolute inset-x-0 bottom-0 touch-none cursor-ns-resize"
-        style={{ height: HANDLE_HEIGHT }}
-        aria-hidden="true"
-      />
+      {!spillsOver && (
+        <div
+          onPointerDown={handleResizePointerDown('end')}
+          onPointerMove={handleResizePointerMove}
+          onPointerUp={handleResizePointerUp}
+          onPointerCancel={handleResizePointerCancel}
+          className="absolute inset-x-0 bottom-0 touch-none cursor-ns-resize"
+          style={{ height: HANDLE_HEIGHT }}
+          aria-hidden="true"
+        />
+      )}
     </button>
   );
 }

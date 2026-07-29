@@ -27,6 +27,14 @@ const DESKTOP_VIEW_OPTIONS: { value: ViewMode; label: string; icon: JSX.Element 
   { value: 'summary', label: 'Resumen', icon: <BarChart3 className="h-4 w-4" aria-hidden="true" /> },
 ];
 
+const VIEW_COPY: Record<ViewMode, { title: string; description: string }> = {
+  day: { title: 'Vista diaria', description: 'Turnos y total del día seleccionado.' },
+  week: { title: 'Semana compacta', description: 'Compara rápidamente personas, días y horas.' },
+  calendar: { title: 'Calendario dinámico', description: 'Mueve, ajusta y crea turnos directamente sobre la grilla.' },
+  people: { title: 'Horarios por persona', description: 'Revisa y edita el detalle individual de cada integrante.' },
+  summary: { title: 'Resumen de horas', description: 'Totales, promedios y carga semanal del equipo.' },
+};
+
 function ScheduleWorkspace() {
   const schedule = useActiveSchedule();
   const updateScheduleViewSettings = useStore((s) => s.updateScheduleViewSettings);
@@ -51,9 +59,10 @@ function ScheduleWorkspace() {
     default:
       content = <WeeklyCompactView schedule={schedule} />;
   }
+  const viewCopy = VIEW_COPY[schedule.viewSettings.viewMode];
 
   return (
-    <div className="min-h-dvh bg-slate-50 dark:bg-slate-950">
+    <div className="app-shell min-h-dvh">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:font-medium focus:shadow-lg dark:focus:bg-slate-900 dark:focus:text-white"
@@ -63,15 +72,23 @@ function ScheduleWorkspace() {
       <AppHeader schedule={schedule} onOpenMenu={() => setSidebarOpen(true)} />
       <div className="flex">
         <Sidebar schedule={schedule} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <main id="main-content" className="min-w-0 flex-1 px-3 pb-24 pt-4 sm:px-4 md:pb-8">
+        <main id="main-content" className="min-w-0 flex-1 px-3 pb-24 pt-4 sm:px-5 md:pb-10 md:pt-5">
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
-            <div className="hidden md:block">
-              <SegmentedControl<ViewMode>
-                ariaLabel="Seleccionar vista del horario"
-                value={schedule.viewSettings.viewMode}
-                onChange={(viewMode) => updateScheduleViewSettings(schedule.id, { viewMode })}
-                options={DESKTOP_VIEW_OPTIONS}
-              />
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/80 bg-white/80 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-bold tracking-tight text-slate-900 dark:text-white sm:text-lg">
+                  {viewCopy.title}
+                </h1>
+                <p className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">{viewCopy.description}</p>
+              </div>
+              <div className="hidden shrink-0 md:block">
+                <SegmentedControl<ViewMode>
+                  ariaLabel="Seleccionar vista del horario"
+                  value={schedule.viewSettings.viewMode}
+                  onChange={(viewMode) => updateScheduleViewSettings(schedule.id, { viewMode })}
+                  options={DESKTOP_VIEW_OPTIONS}
+                />
+              </div>
             </div>
             {schedule.people.length === 0 ? (
               <EmptyState

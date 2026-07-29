@@ -38,7 +38,7 @@ export interface Shift {
   day: number;
   /** Formato HH:mm, 24 horas */
   startTime: string;
-  /** Formato HH:mm, 24 horas. Si es <= startTime, el turno cruza medianoche. */
+  /** Formato HH:mm, 24 horas. Si es < startTime, el turno cruza medianoche. */
   endTime: string;
   breakMinutes: number;
   note?: string;

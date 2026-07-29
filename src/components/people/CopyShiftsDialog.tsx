@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { PersonAvatar } from '../common/PersonAvatar';
@@ -18,6 +18,12 @@ export function CopyShiftsDialog({ isOpen, onClose, schedule, sourcePersonId }: 
   const source = schedule.people.find((p) => p.id === sourcePersonId);
   const targets = schedule.people.filter((p) => p.id !== sourcePersonId);
   const sourceShiftCount = schedule.shifts.filter((s) => s.personId === sourcePersonId).length;
+
+  useEffect(() => {
+    if (isOpen && !targets.some((person) => person.id === targetId)) {
+      setTargetId(null);
+    }
+  }, [isOpen, targetId, targets]);
 
   return (
     <Modal

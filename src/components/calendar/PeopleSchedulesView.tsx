@@ -36,8 +36,10 @@ export function PeopleSchedulesView({ schedule }: PeopleSchedulesViewProps) {
   const conflicts = useMemo(() => detectConflicts(schedule.shifts), [schedule.shifts]);
   const days = useMemo(() => {
     const ordered = getOrderedDayIndices(schedule.viewSettings.weekStart);
-    return filterDayIndices(ordered, schedule.viewSettings.dayFilter, schedule.shifts);
-  }, [schedule.viewSettings.weekStart, schedule.viewSettings.dayFilter, schedule.shifts]);
+    const visibleIds = new Set(visiblePeople.map((person) => person.id));
+    const visibleShifts = schedule.shifts.filter((shift) => visibleIds.has(shift.personId));
+    return filterDayIndices(ordered, schedule.viewSettings.dayFilter, visibleShifts);
+  }, [schedule.viewSettings.weekStart, schedule.viewSettings.dayFilter, schedule.shifts, visiblePeople]);
   const stats = useMemo(
     () => calculateAllStats(schedule.shifts, visiblePeople.map((p) => p.id)),
     [schedule.shifts, visiblePeople],

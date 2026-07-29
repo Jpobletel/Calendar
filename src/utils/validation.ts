@@ -68,8 +68,10 @@ export function validateShiftForm(input: ShiftFormInput): { valid: boolean; erro
 
   if (!errors.startTime && !errors.endTime && !errors.breakMinutes) {
     const duration = getShiftDurationMinutes(input.startTime, input.endTime);
-    if (input.breakMinutes > duration) {
-      errors.breakMinutes = 'La pausa no puede ser mayor que la duración del turno.';
+    if (duration === 0) {
+      errors.endTime = 'La hora de término debe ser distinta de la hora de inicio.';
+    } else if (input.breakMinutes >= duration) {
+      errors.breakMinutes = 'La pausa debe ser menor que la duración del turno.';
     }
   }
 

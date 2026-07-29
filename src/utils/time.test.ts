@@ -39,7 +39,7 @@ describe('isOvernightShift', () => {
   it('detecta turnos que cruzan medianoche', () => {
     expect(isOvernightShift('22:00', '06:00')).toBe(true);
     expect(isOvernightShift('09:00', '18:00')).toBe(false);
-    expect(isOvernightShift('09:00', '09:00')).toBe(true);
+    expect(isOvernightShift('09:00', '09:00')).toBe(false);
   });
 });
 

@@ -21,7 +21,7 @@ export function ShiftChip({ shift, person, hasConflict, onClick, showPerson = tr
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-touch w-full flex-col gap-0.5 rounded-lg border-l-4 bg-white px-2.5 py-1.5 text-left shadow-sm transition-shadow hover:shadow dark:bg-slate-800 ${
+      className={`flex min-h-touch w-full flex-col gap-0.5 rounded-xl border border-slate-100 border-l-4 bg-white px-2.5 py-2 text-left shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:border-slate-700 dark:bg-slate-800 ${
         hasConflict ? 'ring-2 ring-amber-400' : ''
       }`}
       style={{ borderLeftColor: color }}

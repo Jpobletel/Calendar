@@ -28,9 +28,9 @@ export function isValidTimeString(time: string): boolean {
   return TIME_RE.test(time);
 }
 
-/** Un turno cruza medianoche cuando su hora de término es menor o igual a la de inicio. */
+/** Un turno cruza medianoche cuando su hora de término es anterior a la de inicio. */
 export function isOvernightShift(startTime: string, endTime: string): boolean {
-  return timeToMinutes(endTime) <= timeToMinutes(startTime);
+  return timeToMinutes(endTime) < timeToMinutes(startTime);
 }
 
 /** Duración total del turno en minutos, incluyendo pausa. Nunca es negativa. */

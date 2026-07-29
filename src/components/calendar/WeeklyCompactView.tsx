@@ -24,8 +24,10 @@ export function WeeklyCompactView({ schedule }: WeeklyCompactViewProps) {
   const conflicts = useMemo(() => detectConflicts(schedule.shifts), [schedule.shifts]);
   const days = useMemo(() => {
     const ordered = getOrderedDayIndices(schedule.viewSettings.weekStart);
-    return filterDayIndices(ordered, schedule.viewSettings.dayFilter, schedule.shifts);
-  }, [schedule.viewSettings.weekStart, schedule.viewSettings.dayFilter, schedule.shifts]);
+    const visibleIds = new Set(visiblePeople.map((person) => person.id));
+    const visibleShifts = schedule.shifts.filter((shift) => visibleIds.has(shift.personId));
+    return filterDayIndices(ordered, schedule.viewSettings.dayFilter, visibleShifts);
+  }, [schedule.viewSettings.weekStart, schedule.viewSettings.dayFilter, schedule.shifts, visiblePeople]);
 
   if (visiblePeople.length === 0) {
     return <EmptyState title="Selecciona una o más personas para ver sus horarios." />;
@@ -33,7 +35,7 @@ export function WeeklyCompactView({ schedule }: WeeklyCompactViewProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-900">

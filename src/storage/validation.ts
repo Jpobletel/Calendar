@@ -1,5 +1,6 @@
 import type { AppData, AppSettings, ExportedData, Person, Schedule, ScheduleViewSettings, Shift } from '../types';
-import { isValidTimeString } from '../utils/time';
+import { APP_DATA_VERSION } from '../types';
+import { getShiftDurationMinutes, isValidTimeString, timeToMinutes } from '../utils/time';
 
 export interface ValidationResult {
   valid: boolean;
@@ -32,7 +33,7 @@ function validatePerson(value: unknown, errors: string[], path: string): value i
   if (!isString(value.name)) { errors.push(`${path}.name: nombre faltante o inválido.`); ok = false; }
   if (!isString(value.color)) { errors.push(`${path}.color: color faltante o inválido.`); ok = false; }
   if (!isBoolean(value.visible)) { errors.push(`${path}.visible: debe ser verdadero o falso.`); ok = false; }
-  if (!isNumber(value.order)) { errors.push(`${path}.order: debe ser un número.`); ok = false; }
+  if (!isNumber(value.order) || !Number.isInteger(value.order) || value.order < 0) { errors.push(`${path}.order: debe ser un entero mayor o igual a 0.`); ok = false; }
   if (!isString(value.createdAt)) { errors.push(`${path}.createdAt: fecha faltante o inválida.`); ok = false; }
   return ok;
 }
@@ -45,14 +46,25 @@ function validateShift(value: unknown, errors: string[], path: string): value is
   let ok = true;
   if (!isString(value.id) || value.id.length === 0) { errors.push(`${path}.id: identificador faltante o inválido.`); ok = false; }
   if (!isString(value.personId) || value.personId.length === 0) { errors.push(`${path}.personId: persona asignada faltante.`); ok = false; }
-  if (!isNumber(value.day) || value.day < 0 || value.day > 6) { errors.push(`${path}.day: debe ser un número entre 0 (lunes) y 6 (domingo).`); ok = false; }
+  if (!isNumber(value.day) || !Number.isInteger(value.day) || value.day < 0 || value.day > 6) { errors.push(`${path}.day: debe ser un entero entre 0 (lunes) y 6 (domingo).`); ok = false; }
   if (!isString(value.startTime) || !isValidTimeString(value.startTime)) { errors.push(`${path}.startTime: hora de inicio inválida.`); ok = false; }
   if (!isString(value.endTime) || !isValidTimeString(value.endTime)) { errors.push(`${path}.endTime: hora de término inválida.`); ok = false; }
-  if (!isNumber(value.breakMinutes) || value.breakMinutes < 0) { errors.push(`${path}.breakMinutes: la pausa debe ser un número mayor o igual a 0.`); ok = false; }
+  if (!isNumber(value.breakMinutes) || !Number.isInteger(value.breakMinutes) || value.breakMinutes < 0) { errors.push(`${path}.breakMinutes: la pausa debe ser un entero mayor o igual a 0.`); ok = false; }
   if (value.note !== undefined && !isString(value.note)) { errors.push(`${path}.note: debe ser texto.`); ok = false; }
   if (value.location !== undefined && !isString(value.location)) { errors.push(`${path}.location: debe ser texto.`); ok = false; }
   if (!isString(value.createdAt)) { errors.push(`${path}.createdAt: fecha de creación faltante.`); ok = false; }
   if (!isString(value.updatedAt)) { errors.push(`${path}.updatedAt: fecha de modificación faltante.`); ok = false; }
+  if (
+    isString(value.startTime) &&
+    isString(value.endTime) &&
+    isValidTimeString(value.startTime) &&
+    isValidTimeString(value.endTime) &&
+    isNumber(value.breakMinutes)
+  ) {
+    const duration = getShiftDurationMinutes(value.startTime, value.endTime);
+    if (duration === 0) { errors.push(`${path}: la hora de inicio y término no pueden ser iguales.`); ok = false; }
+    if (value.breakMinutes >= duration) { errors.push(`${path}.breakMinutes: debe ser menor que la duración del turno.`); ok = false; }
+  }
   return ok;
 }
 
@@ -62,14 +74,24 @@ function validateViewSettings(value: unknown, errors: string[], path: string): v
     return false;
   }
   let ok = true;
-  if (!isArray(value.selectedPersonIds)) { errors.push(`${path}.selectedPersonIds: debe ser una lista.`); ok = false; }
-  if (!isString(value.viewMode)) { errors.push(`${path}.viewMode: debe ser texto.`); ok = false; }
-  if (!isString(value.weekStart)) { errors.push(`${path}.weekStart: debe ser texto.`); ok = false; }
-  if (!isString(value.dayFilter)) { errors.push(`${path}.dayFilter: debe ser texto.`); ok = false; }
-  if (!isString(value.calendarRangeMode)) { errors.push(`${path}.calendarRangeMode: debe ser texto.`); ok = false; }
-  if (!isString(value.calendarStart)) { errors.push(`${path}.calendarStart: debe ser texto.`); ok = false; }
-  if (!isString(value.calendarEnd)) { errors.push(`${path}.calendarEnd: debe ser texto.`); ok = false; }
-  if (!isNumber(value.selectedDay)) { errors.push(`${path}.selectedDay: debe ser un número.`); ok = false; }
+  if (!isArray(value.selectedPersonIds) || !value.selectedPersonIds.every(isString)) { errors.push(`${path}.selectedPersonIds: debe ser una lista de identificadores.`); ok = false; }
+  if (!isString(value.viewMode) || !['day', 'week', 'calendar', 'people', 'summary'].includes(value.viewMode)) { errors.push(`${path}.viewMode: vista desconocida.`); ok = false; }
+  if (!isString(value.weekStart) || !['monday', 'sunday'].includes(value.weekStart)) { errors.push(`${path}.weekStart: valor desconocido.`); ok = false; }
+  if (!isString(value.dayFilter) || !['all', 'weekdays', 'withShifts'].includes(value.dayFilter)) { errors.push(`${path}.dayFilter: valor desconocido.`); ok = false; }
+  if (!isString(value.calendarRangeMode) || !['full', 'business', 'auto'].includes(value.calendarRangeMode)) { errors.push(`${path}.calendarRangeMode: valor desconocido.`); ok = false; }
+  if (!isString(value.calendarStart) || !isValidTimeString(value.calendarStart)) { errors.push(`${path}.calendarStart: hora inválida.`); ok = false; }
+  if (!isString(value.calendarEnd) || !isValidTimeString(value.calendarEnd)) { errors.push(`${path}.calendarEnd: hora inválida.`); ok = false; }
+  if (
+    isString(value.calendarStart) &&
+    isString(value.calendarEnd) &&
+    isValidTimeString(value.calendarStart) &&
+    isValidTimeString(value.calendarEnd) &&
+    timeToMinutes(value.calendarStart) >= timeToMinutes(value.calendarEnd)
+  ) {
+    errors.push(`${path}: el inicio del rango del calendario debe ser anterior al término.`);
+    ok = false;
+  }
+  if (!isNumber(value.selectedDay) || !Number.isInteger(value.selectedDay) || value.selectedDay < 0 || value.selectedDay > 6) { errors.push(`${path}.selectedDay: debe ser un entero entre 0 y 6.`); ok = false; }
   // Campo agregado después del lanzamiento inicial: opcional para no invalidar datos ya guardados.
   if (value.activePersonId !== undefined && value.activePersonId !== null && !isString(value.activePersonId)) {
     errors.push(`${path}.activePersonId: debe ser texto o nulo.`);
@@ -104,12 +126,32 @@ function validateSchedule(value: unknown, errors: string[], path: string): value
 
   if (ok && isArray(value.shifts) && isArray(value.people)) {
     const peopleIds = new Set((value.people as Person[]).map((p) => p.id));
+    if (peopleIds.size !== value.people.length) {
+      errors.push(`${path}.people: hay identificadores de persona duplicados.`);
+      ok = false;
+    }
+    const shiftIds = new Set((value.shifts as Shift[]).map((shift) => shift.id));
+    if (shiftIds.size !== value.shifts.length) {
+      errors.push(`${path}.shifts: hay identificadores de turno duplicados.`);
+      ok = false;
+    }
     (value.shifts as Shift[]).forEach((s, i) => {
       if (!peopleIds.has(s.personId)) {
         errors.push(`${path}.shifts[${i}]: hace referencia a una persona que no existe (${s.personId}).`);
         ok = false;
       }
     });
+    const settings = value.viewSettings as ScheduleViewSettings;
+    for (const id of settings.selectedPersonIds) {
+      if (!peopleIds.has(id)) {
+        errors.push(`${path}.viewSettings.selectedPersonIds: contiene una persona que no existe (${id}).`);
+        ok = false;
+      }
+    }
+    if (settings.activePersonId && !peopleIds.has(settings.activePersonId)) {
+      errors.push(`${path}.viewSettings.activePersonId: hace referencia a una persona que no existe.`);
+      ok = false;
+    }
   }
   return ok;
 }
@@ -120,7 +162,7 @@ function validateSettings(value: unknown, errors: string[], path: string): value
     return false;
   }
   let ok = true;
-  if (!isString(value.theme)) { errors.push(`${path}.theme: debe ser texto.`); ok = false; }
+  if (!isString(value.theme) || !['light', 'dark', 'system'].includes(value.theme)) { errors.push(`${path}.theme: tema desconocido.`); ok = false; }
   if (value.lastScheduleId !== null && !isString(value.lastScheduleId)) { errors.push(`${path}.lastScheduleId: debe ser texto o nulo.`); ok = false; }
   if (!isBoolean(value.sampleDataDismissed)) { errors.push(`${path}.sampleDataDismissed: debe ser verdadero o falso.`); ok = false; }
   return ok;
@@ -132,7 +174,7 @@ export function validateAppData(value: unknown): ValidationResult & { data?: App
     return { valid: false, errors: ['El contenido guardado no es un objeto JSON válido.'] };
   }
   let ok = true;
-  if (!isNumber(value.version)) { errors.push('version: falta o es inválida.'); ok = false; }
+  if (!isNumber(value.version) || value.version !== APP_DATA_VERSION) { errors.push(`version: debe ser ${APP_DATA_VERSION}.`); ok = false; }
   if (!isArray(value.schedules)) {
     errors.push('schedules: debe ser una lista de horarios.');
     ok = false;
@@ -140,6 +182,18 @@ export function validateAppData(value: unknown): ValidationResult & { data?: App
     value.schedules.forEach((s, i) => { ok = validateSchedule(s, errors, `schedules[${i}]`) && ok; });
   }
   if (!validateSettings(value.settings, errors, 'settings')) ok = false;
+  if (ok && isArray(value.schedules)) {
+    const scheduleIds = new Set((value.schedules as Schedule[]).map((schedule) => schedule.id));
+    if (scheduleIds.size !== value.schedules.length) {
+      errors.push('schedules: hay identificadores de horario duplicados.');
+      ok = false;
+    }
+    const settings = value.settings as AppSettings;
+    if (settings.lastScheduleId && !scheduleIds.has(settings.lastScheduleId)) {
+      errors.push('settings.lastScheduleId: hace referencia a un horario que no existe.');
+      ok = false;
+    }
+  }
 
   if (!ok) return { valid: false, errors };
   return { valid: true, errors: [], data: value as unknown as AppData };
@@ -151,7 +205,7 @@ export function validateExportedData(value: unknown): ValidationResult & { data?
     return { valid: false, errors: ['El archivo no contiene un objeto JSON válido.'] };
   }
   let ok = true;
-  if (!isNumber(value.version)) { errors.push('version: falta el número de versión del formato.'); ok = false; }
+  if (!isNumber(value.version) || value.version !== APP_DATA_VERSION) { errors.push(`version: debe ser ${APP_DATA_VERSION}.`); ok = false; }
   if (!isString(value.exportedAt)) { errors.push('exportedAt: falta la fecha de exportación.'); ok = false; }
   if (!isArray(value.schedules)) {
     errors.push('schedules: el archivo debe contener una lista de horarios.');
@@ -163,6 +217,20 @@ export function validateExportedData(value: unknown): ValidationResult & { data?
     value.schedules.forEach((s, i) => { ok = validateSchedule(s, errors, `schedules[${i}]`) && ok; });
   }
   if (value.settings !== undefined && !validateSettings(value.settings, errors, 'settings')) ok = false;
+  if (ok && isArray(value.schedules)) {
+    const scheduleIds = new Set((value.schedules as Schedule[]).map((schedule) => schedule.id));
+    if (scheduleIds.size !== value.schedules.length) {
+      errors.push('schedules: hay identificadores de horario duplicados.');
+      ok = false;
+    }
+    if (value.settings !== undefined) {
+      const settings = value.settings as AppSettings;
+      if (settings.lastScheduleId && !scheduleIds.has(settings.lastScheduleId)) {
+        errors.push('settings.lastScheduleId: hace referencia a un horario que no existe.');
+        ok = false;
+      }
+    }
+  }
 
   if (!ok) return { valid: false, errors };
   return { valid: true, errors: [], data: value as unknown as ExportedData };

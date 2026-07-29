@@ -47,9 +47,10 @@ export function SummaryView({ schedule }: SummaryViewProps) {
   }, [schedule.people, stats, filterBy]);
 
   const sorted = useMemo(() => sortPeopleBySummary(filtered, stats, sortBy), [filtered, stats, sortBy]);
+  const sortedPersonIds = useMemo(() => new Set(sorted.map((person) => person.id)), [sorted]);
   const grandTotal = useMemo(
-    () => calculateGrandTotalMinutes(schedule.shifts.filter((s) => sorted.some((p) => p.id === s.personId))),
-    [schedule.shifts, sorted],
+    () => calculateGrandTotalMinutes(schedule.shifts.filter((s) => sortedPersonIds.has(s.personId))),
+    [schedule.shifts, sortedPersonIds],
   );
 
   if (schedule.people.length === 0) {

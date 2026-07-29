@@ -54,6 +54,27 @@ describe('validateShiftForm', () => {
     expect(errors.breakMinutes).toBeDefined();
   });
 
+  it('rechaza turnos sin duración y pausas iguales a toda la duración', () => {
+    expect(
+      validateShiftForm({
+        personId: 'p1',
+        day: 0,
+        startTime: '09:00',
+        endTime: '09:00',
+        breakMinutes: 0,
+      }).valid,
+    ).toBe(false);
+    expect(
+      validateShiftForm({
+        personId: 'p1',
+        day: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        breakMinutes: 60,
+      }).valid,
+    ).toBe(false);
+  });
+
   it('acepta un turno válido', () => {
     const { valid } = validateShiftForm({
       personId: 'p1',

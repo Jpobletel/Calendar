@@ -67,7 +67,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               onChange={(calendarRangeMode) => updateScheduleViewSettings(schedule.id, { calendarRangeMode })}
               options={[
                 { value: 'auto', label: 'Automático' },
-                { value: 'business', label: '06:00 - 23:00' },
+                { value: 'business', label: `${viewSettings.calendarStart} - ${viewSettings.calendarEnd}` },
                 { value: 'full', label: '00:00 - 24:00' },
               ]}
             />

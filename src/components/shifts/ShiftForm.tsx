@@ -18,6 +18,8 @@ interface ShiftFormProps {
   shiftId?: string;
   initialPersonId?: string;
   initialDay?: number;
+  initialStartTime?: string;
+  initialEndTime?: string;
 }
 
 const TEMP_ID = '__preview__';
@@ -35,7 +37,16 @@ interface Snapshot {
 const inputClass =
   'min-h-touch w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-white';
 
-export function ShiftForm({ isOpen, onClose, schedule, shiftId, initialPersonId, initialDay }: ShiftFormProps) {
+export function ShiftForm({
+  isOpen,
+  onClose,
+  schedule,
+  shiftId,
+  initialPersonId,
+  initialDay,
+  initialStartTime,
+  initialEndTime,
+}: ShiftFormProps) {
   const addShift = useStore((s) => s.addShift);
   const updateShift = useStore((s) => s.updateShift);
   const deleteShift = useStore((s) => s.deleteShift);
@@ -71,8 +82,8 @@ export function ShiftForm({ isOpen, onClose, schedule, shiftId, initialPersonId,
       : {
           personId: initialPersonId ?? schedule.people[0]?.id ?? '',
           day: initialDay ?? 0,
-          startTime: '09:00',
-          endTime: '17:00',
+          startTime: initialStartTime ?? '09:00',
+          endTime: initialEndTime ?? '17:00',
           breakMinutes: 0,
           note: '',
           location: '',

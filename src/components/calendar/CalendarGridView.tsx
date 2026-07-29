@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { MousePointerClick, Zap } from 'lucide-react';
 import { EmptyState } from '../common/EmptyState';
 import { PersonAvatar } from '../common/PersonAvatar';
 import { ShiftForm } from '../shifts/ShiftForm';
 import { CalendarShiftBlock } from './CalendarShiftBlock';
+import { MobileCalendarView } from './MobileCalendarView';
+import { useIsDesktop } from '../../hooks/useMediaQuery';
 import { useStore } from '../../state/store';
 import type { Schedule } from '../../types';
 import { DAY_LABELS_SHORT } from '../../types';
@@ -22,13 +24,13 @@ import {
   type DragPreview,
 } from './dragUtils';
 
-function getVisibleRange(schedule: Schedule, visiblePersonIds: string[]): { startHour: number; endHour: number } {
+function getVisibleRange(schedule: Schedule, visiblePersonIds: Set<string>): { startHour: number; endHour: number } {
   const { calendarRangeMode, calendarStart, calendarEnd } = schedule.viewSettings;
   if (calendarRangeMode === 'full') return { startHour: 0, endHour: 24 };
   if (calendarRangeMode === 'business') {
     return { startHour: timeToMinutes(calendarStart) / 60, endHour: timeToMinutes(calendarEnd) / 60 };
   }
-  const relevant = schedule.shifts.filter((s) => visiblePersonIds.includes(s.personId));
+  const relevant = schedule.shifts.filter((s) => visiblePersonIds.has(s.personId));
   if (relevant.length === 0) return { startHour: 8, endHour: 20 };
   let min = 24;
   let max = 0;
@@ -56,6 +58,13 @@ interface CalendarGridViewProps {
   schedule: Schedule;
 }
 
+interface CreatingShiftState {
+  day: number;
+  personId: string;
+  startTime: string;
+  endTime: string;
+}
+
 /**
  * Vista tipo calendario con eje de horas: muestra a todas las personas visibles a la vez
  * (vista combinada). Los bloques se pueden arrastrar para moverlos y sus bordes se pueden
@@ -67,29 +76,50 @@ interface CalendarGridViewProps {
 export function CalendarGridView({ schedule }: CalendarGridViewProps) {
   const addShift = useStore((s) => s.addShift);
   const updateShift = useStore((s) => s.updateShift);
+  const updateScheduleViewSettings = useStore((s) => s.updateScheduleViewSettings);
+  const setActivePerson = useStore((s) => s.setActivePerson);
   const pushNotification = useStore((s) => s.pushNotification);
+  const isDesktop = useIsDesktop();
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [creatingShift, setCreatingShift] = useState<CreatingShiftState | null>(null);
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
   const createRef = useRef<CreateDragState | null>(null);
 
-  const activePersonId = schedule.viewSettings.activePersonId;
   const visiblePeople = useMemo(() => sortPeopleByOrder(schedule.people.filter((p) => p.visible)), [schedule.people]);
+  const visiblePersonIds = useMemo(() => new Set(visiblePeople.map((person) => person.id)), [visiblePeople]);
+  const activePerson = visiblePeople.find((p) => p.id === schedule.viewSettings.activePersonId);
+  const activePersonId = activePerson?.id ?? null;
   const conflicts = useMemo(() => detectConflicts(schedule.shifts), [schedule.shifts]);
   const days = useMemo(() => {
     const ordered = getOrderedDayIndices(schedule.viewSettings.weekStart);
-    return filterDayIndices(ordered, schedule.viewSettings.dayFilter, schedule.shifts);
-  }, [schedule.viewSettings.weekStart, schedule.viewSettings.dayFilter, schedule.shifts]);
+    const visibleShifts = schedule.shifts.filter((shift) => visiblePersonIds.has(shift.personId));
+    return filterDayIndices(ordered, schedule.viewSettings.dayFilter, visibleShifts);
+  }, [schedule.viewSettings.weekStart, schedule.viewSettings.dayFilter, schedule.shifts, visiblePersonIds]);
 
   const { startHour, endHour } = useMemo(
-    () => getVisibleRange(schedule, visiblePeople.map((p) => p.id)),
-    [schedule, visiblePeople],
+    () => getVisibleRange(schedule, visiblePersonIds),
+    [schedule, visiblePersonIds],
   );
   const totalHours = Math.max(1, endHour - startHour);
   const hourMarks = Array.from({ length: totalHours + 1 }, (_, i) => startHour + i);
   const rangeStartMinutes = startHour * 60;
   const rangeEndMinutes = endHour * 60;
 
-  const activePerson = visiblePeople.find((p) => p.id === activePersonId);
+  useEffect(() => {
+    if (
+      !isDesktop &&
+      days.length > 0 &&
+      !days.includes(schedule.viewSettings.selectedDay)
+    ) {
+      updateScheduleViewSettings(schedule.id, { selectedDay: days[0] });
+    }
+  }, [
+    days,
+    isDesktop,
+    schedule.id,
+    schedule.viewSettings.selectedDay,
+    updateScheduleViewSettings,
+  ]);
 
   function commitPreview(preview: DragPreview) {
     if (preview.endMinutes - preview.startMinutes < MIN_DURATION_MINUTES) return;
@@ -180,8 +210,57 @@ export function CalendarGridView({ schedule }: CalendarGridViewProps) {
     });
   }
 
+  function handleColumnPointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
+    const create = createRef.current;
+    if (!create || create.pointerId !== event.pointerId) return;
+    createRef.current = null;
+    setDragPreview(null);
+  }
+
   if (visiblePeople.length === 0) {
     return <EmptyState title="Selecciona una o más personas para ver sus horarios." />;
+  }
+
+  if (!isDesktop) {
+    return (
+      <>
+        <MobileCalendarView
+          schedule={schedule}
+          visiblePeople={visiblePeople}
+          days={days}
+          activePerson={activePerson}
+          startHour={startHour}
+          endHour={endHour}
+          conflicts={conflicts}
+          onSelectDay={(selectedDay) => updateScheduleViewSettings(schedule.id, { selectedDay })}
+          onSetActivePerson={(personId) => setActivePerson(schedule.id, personId)}
+          onCreateShift={setCreatingShift}
+          onEditShift={setEditingShiftId}
+          onMissingActivePerson={() =>
+            pushNotification('info', 'Elige primero una persona en la fila “Crear turnos para”.')
+          }
+        />
+        {creatingShift && (
+          <ShiftForm
+            isOpen
+            onClose={() => setCreatingShift(null)}
+            schedule={schedule}
+            initialDay={creatingShift.day}
+            initialPersonId={creatingShift.personId}
+            initialStartTime={creatingShift.startTime}
+            initialEndTime={creatingShift.endTime}
+          />
+        )}
+        {editingShiftId && (
+          <ShiftForm
+            isOpen
+            onClose={() => setEditingShiftId(null)}
+            schedule={schedule}
+            shiftId={editingShiftId}
+          />
+        )}
+      </>
+    );
   }
 
   return (
@@ -217,7 +296,7 @@ export function CalendarGridView({ schedule }: CalendarGridViewProps) {
         )}
       </p>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex min-w-[760px]">
           <div className="w-14 shrink-0 border-r border-slate-200 dark:border-slate-800">
             <div style={{ height: 32 }} />
@@ -234,7 +313,7 @@ export function CalendarGridView({ schedule }: CalendarGridViewProps) {
             </div>
           </div>
           {days.map((day) => {
-            const dayShifts = schedule.shifts.filter((s) => s.day === day && visiblePeople.some((p) => p.id === s.personId));
+            const dayShifts = schedule.shifts.filter((s) => s.day === day && visiblePersonIds.has(s.personId));
             const laneItems = dayShifts.map((s) => ({
               id: s.id,
               start: timeToMinutes(s.startTime),
@@ -287,7 +366,7 @@ export function CalendarGridView({ schedule }: CalendarGridViewProps) {
                   onPointerDown={handleColumnPointerDown(day)}
                   onPointerMove={handleColumnPointerMove}
                   onPointerUp={handleColumnPointerUp}
-                  onPointerCancel={handleColumnPointerUp}
+                  onPointerCancel={handleColumnPointerCancel}
                 >
                   {hourMarks.slice(0, -1).map((hour, index) => (
                     <div
@@ -299,11 +378,14 @@ export function CalendarGridView({ schedule }: CalendarGridViewProps) {
                   {dayShifts.map((shift) => {
                     const person = schedule.people.find((p) => p.id === shift.personId);
                     const startMin = timeToMinutes(shift.startTime);
-                    if (startMin < rangeStartMinutes || startMin > rangeEndMinutes) return null;
                     const duration = getShiftDurationMinutes(shift.startTime, shift.endTime);
-                    const visibleEnd = Math.min(rangeEndMinutes, startMin + duration);
-                    const top = ((startMin - rangeStartMinutes) / 60) * HOUR_HEIGHT;
-                    const height = Math.max(32, ((visibleEnd - startMin) / 60) * HOUR_HEIGHT);
+                    const endMin = startMin + duration;
+                    if (endMin <= rangeStartMinutes || startMin >= rangeEndMinutes) return null;
+                    const visibleStart = Math.max(rangeStartMinutes, startMin);
+                    const visibleEnd = Math.min(rangeEndMinutes, endMin);
+                    const top = ((visibleStart - rangeStartMinutes) / 60) * HOUR_HEIGHT;
+                    const height = Math.max(32, ((visibleEnd - visibleStart) / 60) * HOUR_HEIGHT);
+                    const startsBefore = startMin < rangeStartMinutes;
                     const spillsOver = startMin + duration > rangeEndMinutes;
                     const lane = lanes.get(shift.id) ?? 0;
                     const hasConflict = isShiftInConflict(conflicts, shift.id);
@@ -320,6 +402,7 @@ export function CalendarGridView({ schedule }: CalendarGridViewProps) {
                         width={`calc(${100 / laneCount}% - 4px)`}
                         rangeStartMinutes={rangeStartMinutes}
                         rangeEndMinutes={rangeEndMinutes}
+                        startsBefore={startsBefore}
                         spillsOver={spillsOver}
                         isDragging={dragPreview?.shiftId === shift.id}
                         onOpenEdit={setEditingShiftId}

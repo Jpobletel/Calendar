@@ -106,7 +106,7 @@ function cloneScheduleWithNewIds(schedule: Schedule, newName: string): Schedule 
   const people = schedule.people.map((p) => {
     const newId = generateId('person');
     idMap.set(p.id, newId);
-    return { ...p, id: newId };
+    return { ...p, id: newId, createdAt: timestamp };
   });
   const shifts = schedule.shifts.map((sh) => ({
     ...sh,
@@ -120,7 +120,15 @@ function cloneScheduleWithNewIds(schedule: Schedule, newName: string): Schedule 
     name: newName,
     people,
     shifts,
-    viewSettings: { ...schedule.viewSettings, selectedPersonIds: people.map((p) => p.id) },
+    viewSettings: {
+      ...schedule.viewSettings,
+      selectedPersonIds: schedule.viewSettings.selectedPersonIds
+        .map((id) => idMap.get(id))
+        .filter((id): id is string => Boolean(id)),
+      activePersonId: schedule.viewSettings.activePersonId
+        ? idMap.get(schedule.viewSettings.activePersonId) ?? null
+        : null,
+    },
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -170,6 +178,7 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   setActiveSchedule: (id) => {
+    if (!get().data.schedules.some((schedule) => schedule.id === id)) return;
     set((s) => ({ data: { ...s.data, settings: { ...s.data.settings, lastScheduleId: id } } }));
   },
 
@@ -209,6 +218,7 @@ export const useStore = create<StoreState>()((set, get) => ({
 
   deleteSchedule: (id) => {
     const deleted = get().data.schedules.find((s) => s.id === id);
+    if (!deleted) return;
     set((s) => {
       const remaining = s.data.schedules.filter((sch) => sch.id !== id);
       let schedules = remaining;
@@ -222,7 +232,7 @@ export const useStore = create<StoreState>()((set, get) => ({
       }
       return { data: { ...s.data, schedules, settings: { ...s.data.settings, lastScheduleId } } };
     });
-    get().pushNotification('success', `Horario "${deleted?.name ?? ''}" eliminado.`);
+    get().pushNotification('success', `Horario "${deleted.name}" eliminado.`);
   },
 
   updateScheduleViewSettings: (id, patch) => {
@@ -250,7 +260,11 @@ export const useStore = create<StoreState>()((set, get) => ({
       data: withSchedule(s.data, scheduleId, (sch) => ({
         ...sch,
         people: [...sch.people, { ...person, order: sch.people.length }],
-        viewSettings: { ...sch.viewSettings, selectedPersonIds: [...sch.viewSettings.selectedPersonIds, person.id] },
+        viewSettings: {
+          ...sch.viewSettings,
+          selectedPersonIds: [...sch.viewSettings.selectedPersonIds, person.id],
+          activePersonId: sch.viewSettings.activePersonId ?? person.id,
+        },
       })),
     }));
     get().pushNotification('success', `Persona "${name}" creada.`);
@@ -272,6 +286,7 @@ export const useStore = create<StoreState>()((set, get) => ({
     const person = schedule?.people.find((p) => p.id === personId);
     const removedShifts = schedule?.shifts.filter((sh) => sh.personId === personId) ?? [];
     if (!schedule || !person) return;
+    const wasActive = schedule.viewSettings.activePersonId === personId;
     set((s) => ({
       data: withSchedule(s.data, scheduleId, (sch) => ({
         ...sch,
@@ -280,6 +295,9 @@ export const useStore = create<StoreState>()((set, get) => ({
         viewSettings: {
           ...sch.viewSettings,
           selectedPersonIds: sch.viewSettings.selectedPersonIds.filter((id) => id !== personId),
+          activePersonId: wasActive
+            ? sch.people.find((p) => p.id !== personId && p.visible)?.id ?? null
+            : sch.viewSettings.activePersonId,
         },
       })),
     }));
@@ -295,6 +313,7 @@ export const useStore = create<StoreState>()((set, get) => ({
               viewSettings: {
                 ...sch.viewSettings,
                 selectedPersonIds: [...sch.viewSettings.selectedPersonIds, personId],
+                activePersonId: wasActive ? personId : sch.viewSettings.activePersonId,
               },
             })),
           }));
@@ -305,10 +324,20 @@ export const useStore = create<StoreState>()((set, get) => ({
 
   togglePersonVisibility: (scheduleId, personId) => {
     set((s) => ({
-      data: withSchedule(s.data, scheduleId, (sch) => ({
-        ...sch,
-        people: sch.people.map((p) => (p.id === personId ? { ...p, visible: !p.visible } : p)),
-      })),
+      data: withSchedule(s.data, scheduleId, (sch) => {
+        const person = sch.people.find((p) => p.id === personId);
+        if (!person) return sch;
+        const willBeVisible = !person.visible;
+        return {
+          ...sch,
+          people: sch.people.map((p) => (p.id === personId ? { ...p, visible: willBeVisible } : p)),
+          viewSettings: {
+            ...sch.viewSettings,
+            activePersonId:
+              !willBeVisible && sch.viewSettings.activePersonId === personId ? null : sch.viewSettings.activePersonId,
+          },
+        };
+      }),
     }));
   },
 
@@ -317,6 +346,13 @@ export const useStore = create<StoreState>()((set, get) => ({
       data: withSchedule(s.data, scheduleId, (sch) => ({
         ...sch,
         people: sch.people.map((p) => (personIds.includes(p.id) ? { ...p, visible } : p)),
+        viewSettings: {
+          ...sch.viewSettings,
+          activePersonId:
+            !visible && sch.viewSettings.activePersonId && personIds.includes(sch.viewSettings.activePersonId)
+              ? null
+              : sch.viewSettings.activePersonId,
+        },
       })),
     }));
   },
@@ -396,7 +432,11 @@ export const useStore = create<StoreState>()((set, get) => ({
     set((s) => ({
       data: withSchedule(s.data, scheduleId, (sch) => ({
         ...sch,
-        viewSettings: { ...sch.viewSettings, activePersonId: personId },
+        viewSettings: {
+          ...sch.viewSettings,
+          activePersonId:
+            personId === null || sch.people.some((person) => person.id === personId && person.visible) ? personId : null,
+        },
       })),
     }));
   },
@@ -411,6 +451,8 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   updateShift: (scheduleId, shiftId, patch) => {
+    const schedule = get().data.schedules.find((s) => s.id === scheduleId);
+    if (!schedule?.shifts.some((shift) => shift.id === shiftId)) return;
     set((s) => ({
       data: withSchedule(s.data, scheduleId, (sch) => ({
         ...sch,

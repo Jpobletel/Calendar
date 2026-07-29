@@ -1,4 +1,5 @@
 import { useId, useRef, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useModalA11y } from '../../hooks/useModalA11y';
 
@@ -29,9 +30,10 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex animate-fade-in items-end justify-center bg-slate-900/50 backdrop-blur-sm md:items-center md:p-4"
+      data-modal-layer=""
+      className="fixed inset-0 z-[70] flex animate-fade-in items-end justify-center bg-slate-950/55 backdrop-blur-sm md:items-center md:p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -42,7 +44,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white pb-safe-bottom shadow-xl outline-none animate-slide-up dark:bg-slate-900 md:max-h-[85vh] md:animate-fade-in md:rounded-2xl md:pb-0 ${SIZE_CLASS[size]}`}
+        className={`flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/60 bg-white pb-safe-bottom shadow-2xl outline-none animate-slide-up dark:border-slate-700/80 dark:bg-slate-900 md:max-h-[85vh] md:animate-fade-in md:rounded-3xl md:pb-0 ${SIZE_CLASS[size]}`}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:px-6">
           <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">
@@ -53,7 +55,8 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
         <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">{children}</div>
         {footer && <div className="border-t border-slate-200 px-4 py-3 dark:border-slate-800 sm:px-6">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

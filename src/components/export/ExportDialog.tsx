@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, FileJson, Printer } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -33,6 +33,13 @@ export function ExportDialog({ isOpen, onClose, schedule }: ExportDialogProps) {
   const [quality, setQuality] = useState<ExportQuality>('normal');
   const [background, setBackground] = useState<ExportBackground>('light');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!schedule.people.some((person) => person.id === personId)) {
+      setPersonId(schedule.people[0]?.id ?? '');
+    }
+  }, [isOpen, personId, schedule.id, schedule.people]);
 
   async function handleDownload() {
     if (scope === 'person' && !personId) {
