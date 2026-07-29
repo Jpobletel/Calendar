@@ -425,8 +425,16 @@ export function ExportContent({ job }: { job: ExportJob }) {
 
   if (job.scope === 'calendarSnapshot') {
     people = sortPeopleByOrder(job.schedule.people.filter((person) => person.visible));
-    subtitle = 'Calendario visual — semana completa con resumen';
-    body = <CalendarSnapshot schedule={job.schedule} people={people} days={days} palette={palette} />;
+    const visiblePersonIds = new Set(people.map((person) => person.id));
+    const snapshotDays = days.filter(
+      (day) =>
+        day <= 4 ||
+        job.schedule.shifts.some(
+          (shift) => shift.day === day && visiblePersonIds.has(shift.personId),
+        ),
+    );
+    subtitle = 'Calendario visual y resumen semanal';
+    body = <CalendarSnapshot schedule={job.schedule} people={people} days={snapshotDays} palette={palette} />;
   } else if (job.scope === 'person' && job.personId) {
     const person = job.schedule.people.find((p) => p.id === job.personId);
     people = person ? [person] : [];
