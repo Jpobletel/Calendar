@@ -72,63 +72,85 @@ export function createEmptySchedule(name: string): Schedule {
   };
 }
 
-/**
- * Genera un horario de ejemplo que ilustra: varias personas con colores distintos,
- * turnos de lunes a sábado, una persona con dos turnos el mismo día, un turno con
- * pausa, un turno que cruza medianoche y un conflicto de horarios intencional.
- */
-export function createSampleSchedule(): Schedule {
+const VERONICA_COLOR = PERSON_COLORS[10]; // teal, a tono con las plantillas originales
+
+/** Construye un horario de ejemplo con una sola persona (Verónica López) y sus turnos de lunes a viernes. */
+function buildVeronicaSchedule(name: string, shiftInputs: Array<{ day: number; startTime: string; endTime: string }>): Schedule {
   const now = new Date().toISOString();
-
-  const veronica = createPerson('Verónica Soto', PERSON_COLORS[0], 0);
-  const camila = createPerson('Camila Rojas', PERSON_COLORS[1], 1);
-  const diego = createPerson('Diego Fernández', PERSON_COLORS[2], 2);
-
-  const people = [veronica, camila, diego];
-
-  const shifts: Shift[] = [
-    // Verónica: turno normal con pausa (lunes)
-    createShift({ personId: veronica.id, day: 0, startTime: '09:00', endTime: '18:00', breakMinutes: 60, location: 'Sucursal Centro' }),
-    // Verónica: dos turnos el mismo día (martes, mañana y tarde)
-    createShift({ personId: veronica.id, day: 1, startTime: '09:00', endTime: '13:00' }),
-    createShift({ personId: veronica.id, day: 1, startTime: '15:00', endTime: '19:00', note: 'Turno partido' }),
-    createShift({ personId: veronica.id, day: 2, startTime: '09:00', endTime: '18:00', breakMinutes: 60 }),
-    // Verónica: conflicto de horarios intencional (jueves, turnos superpuestos)
-    createShift({ personId: veronica.id, day: 3, startTime: '09:00', endTime: '14:00', note: 'Ejemplo de conflicto' }),
-    createShift({ personId: veronica.id, day: 3, startTime: '13:00', endTime: '18:00', note: 'Ejemplo de conflicto' }),
-
-    // Camila: turno nocturno que cruza medianoche (lunes -> martes)
-    createShift({ personId: camila.id, day: 0, startTime: '22:00', endTime: '06:00', note: 'Termina al día siguiente' }),
-    createShift({ personId: camila.id, day: 2, startTime: '10:00', endTime: '16:00' }),
-    createShift({ personId: camila.id, day: 4, startTime: '09:00', endTime: '17:00', breakMinutes: 30 }),
-    createShift({ personId: camila.id, day: 5, startTime: '09:00', endTime: '13:00' }),
-
-    // Diego: turnos regulares con pausa, incluyendo sábado
-    createShift({ personId: diego.id, day: 1, startTime: '08:00', endTime: '16:00', breakMinutes: 45, location: 'Bodega Norte' }),
-    createShift({ personId: diego.id, day: 3, startTime: '08:00', endTime: '16:00', breakMinutes: 45 }),
-    createShift({ personId: diego.id, day: 4, startTime: '08:00', endTime: '16:00', breakMinutes: 45 }),
-    createShift({ personId: diego.id, day: 5, startTime: '08:00', endTime: '12:00' }),
-  ];
+  const veronica = createPerson('Verónica López', VERONICA_COLOR, 0);
+  const shifts = shiftInputs.map((input) => createShift({ personId: veronica.id, ...input }));
 
   return {
     id: generateId('schedule'),
-    name: 'Semana actual',
-    people,
+    name,
+    people: [veronica],
     shifts,
-    viewSettings: createDefaultViewSettings(people.map((p) => p.id)),
+    viewSettings: {
+      ...createDefaultViewSettings([veronica.id]),
+      dayFilter: 'weekdays',
+    },
     createdAt: now,
     updatedAt: now,
   };
 }
 
+/**
+ * Tres opciones de "jornada pareja" para la misma persona (Verónica López), ilustrando
+ * que un mismo horario guardado puede tener varias variantes independientes entre las
+ * que se puede cambiar con el selector de horarios. Los tres reparten 40 horas semanales
+ * de lunes a viernes de formas distintas.
+ */
+export function createSampleSchedules(): Schedule[] {
+  const option1 = buildVeronicaSchedule('Opción 1 · Jornada pareja', [
+    // 8 h netas cada día, salida siempre a las 18:00 (turno partido con colación 14:30–16:00)
+    { day: 0, startTime: '08:30', endTime: '14:30' },
+    { day: 0, startTime: '16:00', endTime: '18:00' },
+    { day: 1, startTime: '08:30', endTime: '14:30' },
+    { day: 1, startTime: '16:00', endTime: '18:00' },
+    { day: 2, startTime: '08:30', endTime: '14:30' },
+    { day: 2, startTime: '16:00', endTime: '18:00' },
+    { day: 3, startTime: '08:30', endTime: '14:30' },
+    { day: 3, startTime: '16:00', endTime: '18:00' },
+    { day: 4, startTime: '08:30', endTime: '14:30' },
+    { day: 4, startTime: '16:00', endTime: '18:00' },
+  ]);
+
+  const option2 = buildVeronicaSchedule('Opción 2 · Jornada pareja', [
+    // Lunes a jueves: turno partido más corto en la tarde (7,5 h). Viernes: jornada continua sin colación (10 h).
+    { day: 0, startTime: '08:30', endTime: '14:30' },
+    { day: 0, startTime: '16:00', endTime: '17:30' },
+    { day: 1, startTime: '08:30', endTime: '14:30' },
+    { day: 1, startTime: '16:00', endTime: '17:30' },
+    { day: 2, startTime: '08:30', endTime: '14:30' },
+    { day: 2, startTime: '16:00', endTime: '17:30' },
+    { day: 3, startTime: '08:30', endTime: '14:30' },
+    { day: 3, startTime: '16:00', endTime: '17:30' },
+    { day: 4, startTime: '08:30', endTime: '18:30' },
+  ]);
+
+  const option3 = buildVeronicaSchedule('Opción 3 · Jornada pareja', [
+    // Lunes y miércoles: turno partido largo en la tarde (8,5 h). Martes y jueves: solo la mañana (6 h).
+    // Viernes: jornada continua sin colación, la más larga de la semana (11 h).
+    { day: 0, startTime: '08:30', endTime: '14:30' },
+    { day: 0, startTime: '16:00', endTime: '18:30' },
+    { day: 1, startTime: '08:30', endTime: '14:30' },
+    { day: 2, startTime: '08:30', endTime: '14:30' },
+    { day: 2, startTime: '16:00', endTime: '18:30' },
+    { day: 3, startTime: '08:30', endTime: '14:30' },
+    { day: 4, startTime: '08:30', endTime: '19:30' },
+  ]);
+
+  return [option1, option2, option3];
+}
+
 export function createSampleAppData(): AppData {
-  const schedule = createSampleSchedule();
+  const schedules = createSampleSchedules();
   return {
     version: APP_DATA_VERSION,
-    schedules: [schedule],
+    schedules,
     settings: {
       ...createDefaultSettings(),
-      lastScheduleId: schedule.id,
+      lastScheduleId: schedules[0].id,
     },
   };
 }

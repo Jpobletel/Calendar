@@ -21,7 +21,7 @@ Permite administrar varios horarios independientes (por ejemplo "Semana actual",
 - Guardado automático en `localStorage`, con indicador de estado y botón "Guardar ahora".
 - Tema claro, oscuro o según el sistema.
 - Diseño mobile-first: usable cómodamente desde 320px de ancho, con navegación inferior en móvil y barra lateral en escritorio.
-- Datos de ejemplo incluidos en el primer uso (se pueden eliminar o regenerar).
+- Datos de ejemplo incluidos en el primer uso: tres horarios independientes ("Opción 1/2/3 · Jornada pareja") para una misma persona, mostrando cómo una persona puede tener varias variantes de horario guardadas por separado (se pueden eliminar o regenerar).
 
 ## Tecnologías
 

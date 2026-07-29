@@ -76,11 +76,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
           <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Datos de ejemplo</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Agrega un horario de ejemplo nuevo para ver cómo funciona la aplicación, o elimina tus datos si quieres empezar de cero.
+              Agrega las 3 opciones de horario de ejemplo (misma persona, distinta distribución de horas) para ver cómo
+              funciona la aplicación, o elimina tus datos si quieres empezar de cero.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button variant="secondary" onClick={() => addSampleSchedule()}>
-                Agregar horario de ejemplo
+                Agregar horarios de ejemplo
               </Button>
               <Button variant="danger" onClick={() => setConfirmResetOpen(true)}>
                 Restablecer todos los datos

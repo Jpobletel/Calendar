@@ -15,7 +15,7 @@ import {
   createEmptySchedule,
   createPerson,
   createSampleAppData,
-  createSampleSchedule,
+  createSampleSchedules,
   createShift,
 } from '../data/sampleData';
 import {
@@ -232,16 +232,16 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   addSampleSchedule: () => {
-    const sample = createSampleSchedule();
+    const samples = createSampleSchedules();
     set((s) => ({
       data: {
         ...s.data,
-        schedules: [...s.data.schedules, sample],
-        settings: { ...s.data.settings, lastScheduleId: sample.id },
+        schedules: [...s.data.schedules, ...samples],
+        settings: { ...s.data.settings, lastScheduleId: samples[0].id },
       },
     }));
-    get().pushNotification('success', 'Se agregó un horario de ejemplo.');
-    return sample.id;
+    get().pushNotification('success', `Se agregaron ${samples.length} horarios de ejemplo.`);
+    return samples[0].id;
   },
 
   addPerson: (scheduleId, name, color) => {
